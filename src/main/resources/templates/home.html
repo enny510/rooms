@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.w3.org/1999/xhtml">
+<head>
+    <meta charset="UTF-8">
+    <title>Choose a room</title>
+    <style type="text/css">
+       .roomButton {
+            margin: 3px;
+       }
+       #rooms{
+            display: flex;
+            flex-direction: row;
+       }
+       #screen{
+            display: flex;
+            flex-direction: column;
+       }
+  </style>
+</head>
+<body>
+<script type="text/javascript">
+        var ws;
+
+        function enterRoom(element) {
+            if (ws) {
+                ws.close()
+            }
+
+            ws = new WebSocket("ws://" + document.location.host + "/room/" + element.value);
+            ws.onopen = handleEntrance.bind(element)
+            ws.onmessage = receiveMessage;
+            ws.onclose = redirectOut;
+        }
+
+        function switchLight() {
+            ws.send("");
+        }
+
+        function isOutside() {
+            return !Boolean(ws)
+        }
+
+        function receiveMessage(event) {
+            var light = document.getElementById("light");
+            var screen = document.getElementById("screen");
+
+            console.log(event.data);
+            var message = JSON.parse(event.data);
+
+            switch (message.event) {
+               case "ERROR":
+                   appendMessageTo("Error: " + message.text, screen, true)
+                   break;
+               case "CONNECTED":
+                   handleLightState(message.lightOn);
+                   appendMessageTo(
+                        message.visitorsCount === 1?
+                            "You are lonely":
+                            "You and " + (message.visitorsCount - 1)  + " another visitors are here"
+                        , screen);
+                   break;
+               case "LIGHT_STATE_CHANGED":
+                    handleLightState(message.lightOn);
+                    if(message.initiatorId)
+                        appendMessageTo("Visitor " + message.initiatorId + " has turned light " + (message.lightOn? "on": "off"), screen)
+                    break;
+               case "VISITOR_IN":
+                    appendMessageTo("Visitor " + message.visitorId + " has entered the room", screen)
+                    break;
+               case "VISITOR_OUT":
+                    appendMessageTo("Visitor " + message.visitorId + " has left the room", screen);
+                    break;
+               default:
+                   console.log('Unhandled message type: ' + message);
+                   break;
+            }
+        }
+
+        function redirectOut() {
+            resetButtons()
+            document.getElementById("screen").innerText = "Please choose a room";
+            document.getElementById("light").hidden = true;
+            document.title = "Chose a room"
+        }
+
+        function handleEntrance() {
+            this.disabled = true;
+            document.getElementById("light").hidden = false;
+            document.getElementById("screen").innerText = "";
+            document.title = this.value
+        }
+
+        function resetButtons() {
+            var roomsContainer = document.getElementById("rooms");
+            Array.from(roomsContainer.getElementsByTagName('button')).forEach(function(element) {
+                  element.disabled = false
+                  console.log(element.value);
+            });
+        }
+
+        function appendMessageTo(message, screen, isError = false) {
+            var text = document.createElement("span");
+            if(isError)
+                text.color = 'red'
+            text.innerHTML  +=  message
+            screen.appendChild(text)
+        }
+
+        function handleLightState(isOn) {
+            if(isOn) {
+                light.innerHTML  =  "It's light here. Click here to change that"
+                light.style.color = 'orange'
+            }
+           else {
+               light.innerHTML  = "It's dark here. Click here to change that";
+               light.style.color = 'gray'
+            }
+        }
+    </script>
+
+    <div id="rooms">
+        <div th:each="room: ${rooms}" >
+            <button th:value="${room}" th:class = "roomButton" th:text="${room}" onclick="enterRoom(this)">${room}</button>
+        </div>
+    </div>
+
+    <div id="light" onclick="switchLight()" hidden ></div>
+
+    <div id="screen">
+        Please chose a room
+    </div>
+</body>
+</html>
